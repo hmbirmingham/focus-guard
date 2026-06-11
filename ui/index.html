@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FocusGuard</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #f2f2f7;
+      --card: #ffffff;
+      --border: rgba(0,0,0,.08);
+      --text: #1c1c1e;
+      --secondary: #6e6e73;
+      --blue: #007aff;
+      --green: #34c759;
+      --yellow: #ff9f0a;
+      --red: #ff3b30;
+      --radius: 16px;
+      --shadow: 0 2px 12px rgba(0,0,0,.07);
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 32px 20px 48px;
+    }
+
+    /* ── Header ── */
+    header {
+      max-width: 780px;
+      margin: 0 auto 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .app-title { font-size: 28px; font-weight: 700; letter-spacing: -.5px; }
+    .app-title span { color: var(--blue); }
+    .status-dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      background: var(--secondary);
+      display: inline-block; margin-right: 6px;
+      transition: background .4s;
+    }
+    .status-dot.live  { background: var(--green); }
+    .status-dot.warn  { background: var(--yellow); }
+    .status-dot.alert { background: var(--red);   }
+    .header-meta { font-size: 13px; color: var(--secondary); display: flex; align-items: center; gap: 6px; }
+
+    /* ── Grid ── */
+    .grid {
+      max-width: 780px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    @media (max-width: 560px) { .grid { grid-template-columns: 1fr; } }
+
+    /* ── Card ── */
+    .card {
+      background: var(--card);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
+      padding: 20px 22px;
+    }
+    .card.full-width { grid-column: 1 / -1; }
+    .card-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--secondary);
+      margin-bottom: 14px;
+    }
+
+    /* ── Score ring ── */
+    .score-row { display: flex; gap: 24px; justify-content: space-around; flex-wrap: wrap; }
+    .score-item { text-align: center; }
+    .ring-wrap { position: relative; width: 80px; height: 80px; }
+    .ring-wrap svg { transform: rotate(-90deg); }
+    .ring-bg  { fill: none; stroke: var(--bg); stroke-width: 7; }
+    .ring-arc { fill: none; stroke-width: 7; stroke-linecap: round; transition: stroke-dashoffset .6s ease, stroke .4s; }
+    .ring-val {
+      position: absolute; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; font-weight: 700;
+    }
+    .score-name { font-size: 12px; color: var(--secondary); margin-top: 6px; font-weight: 500; }
+
+    /* ── Gauge bar ── */
+    .gauge-row { display: flex; flex-direction: column; gap: 10px; }
+    .gauge-item {}
+    .gauge-header { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 5px; }
+    .gauge-name  { font-weight: 500; }
+    .gauge-value { color: var(--secondary); font-variant-numeric: tabular-nums; }
+    .gauge-track {
+      height: 6px; background: var(--bg);
+      border-radius: 999px; overflow: hidden;
+    }
+    .gauge-fill {
+      height: 100%; border-radius: 999px;
+      transition: width .5s ease, background .4s;
+    }
+
+    /* ── Raw params table ── */
+    .params-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 12px;
+    }
+    .param-cell {
+      background: var(--bg);
+      border-radius: 12px;
+      padding: 12px 14px;
+    }
+    .param-name  { font-size: 11px; color: var(--secondary); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; margin-bottom: 4px; }
+    .param-value { font-size: 22px; font-weight: 700; letter-spacing: -.5px; }
+    .param-unit  { font-size: 12px; color: var(--secondary); margin-left: 3px; font-weight: 400; }
+    .param-note  { font-size: 11px; color: var(--secondary); margin-top: 3px; }
+
+    /* ── Signals ── */
+    .signal-list { display: flex; flex-direction: column; gap: 8px; }
+    .signal-item {
+      display: flex; align-items: flex-start; gap: 10px;
+      background: var(--bg); border-radius: 10px; padding: 10px 12px;
+      font-size: 13px; font-weight: 500;
+    }
+    .signal-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 3px; }
+    .signal-none { color: var(--secondary); font-size: 13px; }
+
+    /* ── Break banner ── */
+    .break-banner {
+      display: none;
+      grid-column: 1 / -1;
+      background: linear-gradient(135deg, #ff3b30, #ff6b60);
+      color: #fff;
+      border-radius: var(--radius);
+      padding: 20px 24px;
+      font-size: 15px;
+      font-weight: 600;
+      text-align: center;
+      box-shadow: 0 4px 20px rgba(255,59,48,.35);
+    }
+    .break-banner.visible { display: block; }
+
+    /* ── Camera badge ── */
+    .cam-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 12px; font-weight: 600; padding: 4px 10px;
+      border-radius: 999px; background: var(--bg);
+    }
+    .cam-badge.ok    { color: var(--green); }
+    .cam-badge.error { color: var(--red);   }
+
+    /* ── Footer ── */
+    .refresh-note { text-align: center; font-size: 12px; color: var(--secondary); margin-top: 24px; max-width: 780px; margin-inline: auto; }
+
+    /* animation */
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
+    .pulsing { animation: pulse 2s infinite; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="app-title">Focus<span>Guard</span></div>
+  <div class="header-meta">
+    <span class="status-dot" id="liveDot"></span>
+    <span id="liveLabel">Connecting…</span>
+  </div>
+</header>
+
+<div class="grid">
+
+  <!-- Break banner -->
+  <div class="break-banner" id="breakBanner">
+    ⚠️  Break recommended — step away for 5–10 minutes
+  </div>
+
+  <!-- Scores -->
+  <div class="card full-width">
+    <div class="card-label">Scores</div>
+    <div class="score-row">
+      <div class="score-item">
+        <div class="ring-wrap">
+          <svg viewBox="0 0 80 80" width="80" height="80">
+            <circle class="ring-bg" cx="40" cy="40" r="32"/>
+            <circle class="ring-arc" id="ringFatigue" cx="40" cy="40" r="32"
+              stroke-dasharray="201" stroke-dashoffset="201" stroke="var(--yellow)"/>
+          </svg>
+          <div class="ring-val" id="valFatigue">—</div>
+        </div>
+        <div class="score-name">Fatigue</div>
+      </div>
+      <div class="score-item">
+        <div class="ring-wrap">
+          <svg viewBox="0 0 80 80" width="80" height="80">
+            <circle class="ring-bg" cx="40" cy="40" r="32"/>
+            <circle class="ring-arc" id="ringStress" cx="40" cy="40" r="32"
+              stroke-dasharray="201" stroke-dashoffset="201" stroke="var(--red)"/>
+          </svg>
+          <div class="ring-val" id="valStress">—</div>
+        </div>
+        <div class="score-name">Stress</div>
+      </div>
+      <div class="score-item">
+        <div class="ring-wrap">
+          <svg viewBox="0 0 80 80" width="80" height="80">
+            <circle class="ring-bg" cx="40" cy="40" r="32"/>
+            <circle class="ring-arc" id="ringCombined" cx="40" cy="40" r="32"
+              stroke-dasharray="201" stroke-dashoffset="201" stroke="var(--blue)"/>
+          </svg>
+          <div class="ring-val" id="valCombined">—</div>
+        </div>
+        <div class="score-name">Combined</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Camera -->
+  <div class="card">
+    <div class="card-label" style="display:flex;justify-content:space-between;align-items:center">
+      Camera
+      <span class="cam-badge error" id="camBadge">● No face</span>
+    </div>
+    <div class="gauge-row">
+      <div class="gauge-item">
+        <div class="gauge-header">
+          <span class="gauge-name">Blink rate</span>
+          <span class="gauge-value" id="blinkVal">— /min</span>
+        </div>
+        <div class="gauge-track"><div class="gauge-fill" id="blinkBar" style="width:0%"></div></div>
+      </div>
+      <div class="gauge-item">
+        <div class="gauge-header">
+          <span class="gauge-name">Eye openness (EAR)</span>
+          <span class="gauge-value" id="earVal">—</span>
+        </div>
+        <div class="gauge-track"><div class="gauge-fill" id="earBar" style="width:0%"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Keyboard -->
+  <div class="card">
+    <div class="card-label">Keyboard</div>
+    <div class="gauge-row">
+      <div class="gauge-item">
+        <div class="gauge-header">
+          <span class="gauge-name">Speed</span>
+          <span class="gauge-value" id="kpmVal">— kpm</span>
+        </div>
+        <div class="gauge-track"><div class="gauge-fill" id="kpmBar" style="width:0%"></div></div>
+      </div>
+      <div class="gauge-item">
+        <div class="gauge-header">
+          <span class="gauge-name">Error rate</span>
+          <span class="gauge-value" id="errVal">—%</span>
+        </div>
+        <div class="gauge-track"><div class="gauge-fill" id="errBar" style="width:0%"></div></div>
+      </div>
+      <div class="gauge-item">
+        <div class="gauge-header">
+          <span class="gauge-name">Avg pause</span>
+          <span class="gauge-value" id="pauseVal">—s</span>
+        </div>
+        <div class="gauge-track"><div class="gauge-fill" id="pauseBar" style="width:0%"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Raw parameters -->
+  <div class="card full-width">
+    <div class="card-label">Raw Parameters</div>
+    <div class="params-grid">
+      <div class="param-cell">
+        <div class="param-name">Blink Rate</div>
+        <div><span class="param-value" id="pBlink">—</span><span class="param-unit">/min</span></div>
+        <div class="param-note" id="pBlinkNote">healthy: 12–20/min</div>
+      </div>
+      <div class="param-cell">
+        <div class="param-name">Eye Aspect Ratio</div>
+        <div><span class="param-value" id="pEar">—</span></div>
+        <div class="param-note">drowsy threshold: &lt;0.22</div>
+      </div>
+      <div class="param-cell">
+        <div class="param-name">Typing Speed</div>
+        <div><span class="param-value" id="pKpm">—</span><span class="param-unit">kpm</span></div>
+        <div class="param-note">frantic threshold: &gt;400 kpm</div>
+      </div>
+      <div class="param-cell">
+        <div class="param-name">Error Rate</div>
+        <div><span class="param-value" id="pErr">—</span><span class="param-unit">%</span></div>
+        <div class="param-note">stress threshold: &gt;15%</div>
+      </div>
+      <div class="param-cell">
+        <div class="param-name">Avg Pause</div>
+        <div><span class="param-value" id="pPause">—</span><span class="param-unit">s</span></div>
+        <div class="param-note">fatigue threshold: &gt;8s</div>
+      </div>
+      <div class="param-cell">
+        <div class="param-name">Break Score</div>
+        <div><span class="param-value" id="pCombined">—</span><span class="param-unit">/ 100</span></div>
+        <div class="param-note">break recommended: ≥60</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Signals -->
+  <div class="card full-width">
+    <div class="card-label">Signals Detected</div>
+    <div class="signal-list" id="signals">
+      <div class="signal-none">No signals — all clear</div>
+    </div>
+  </div>
+
+</div>
+
+<div class="refresh-note" id="refreshNote">Refreshing every 5s…</div>
+
+<script>
+const CIRCUMFERENCE = 2 * Math.PI * 32; // ~201
+
+function scoreColor(v) {
+  if (v < 30) return 'var(--green)';
+  if (v < 60) return 'var(--yellow)';
+  return 'var(--red)';
+}
+
+function setRing(id, value) {
+  const el = document.getElementById(id);
+  const offset = CIRCUMFERENCE - (value / 100) * CIRCUMFERENCE;
+  el.style.strokeDashoffset = offset;
+  el.style.stroke = scoreColor(value);
+}
+
+function setBar(id, pct, color) {
+  const el = document.getElementById(id);
+  el.style.width = Math.min(pct, 100) + '%';
+  el.style.background = color || 'var(--blue)';
+}
+
+function fmt(v, dec = 1) {
+  return (v === null || v === undefined) ? '—' : Number(v).toFixed(dec);
+}
+
+async function refresh() {
+  try {
+    const res  = await fetch('/api/status');
+    const data = await res.json();
+    const { camera, keyboard, assessment, thresholds } = data;
+
+    // live indicator
+    const dot   = document.getElementById('liveDot');
+    const label = document.getElementById('liveLabel');
+    dot.className   = 'status-dot ' + (assessment.recommend_break ? 'alert' : assessment.combined > 30 ? 'warn' : 'live');
+    label.textContent = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+
+    // break banner
+    document.getElementById('breakBanner').classList.toggle('visible', assessment.recommend_break);
+
+    // rings
+    setRing('ringFatigue',  assessment.fatigue);
+    setRing('ringStress',   assessment.stress);
+    setRing('ringCombined', assessment.combined);
+    document.getElementById('valFatigue').textContent  = fmt(assessment.fatigue, 0) + '%';
+    document.getElementById('valStress').textContent   = fmt(assessment.stress, 0)  + '%';
+    document.getElementById('valCombined').textContent = fmt(assessment.combined, 0) + '%';
+
+    // camera section
+    const faceOk = camera.face_detected;
+    const camBadge = document.getElementById('camBadge');
+    camBadge.className    = 'cam-badge ' + (faceOk ? 'ok' : 'error');
+    camBadge.textContent  = faceOk ? '● Face detected' : '● No face';
+
+    const blinkPct = Math.min((camera.blink_rate / 30) * 100, 100);
+    const blinkColor = camera.blink_rate >= thresholds.blink_normal_min && camera.blink_rate <= thresholds.blink_normal_max
+      ? 'var(--green)' : 'var(--yellow)';
+    document.getElementById('blinkVal').textContent = fmt(camera.blink_rate) + ' /min';
+    setBar('blinkBar', blinkPct, blinkColor);
+
+    const earPct = (camera.avg_ear / 0.4) * 100;
+    const earColor = camera.avg_ear >= thresholds.ear_drowsy ? 'var(--green)' : 'var(--red)';
+    document.getElementById('earVal').textContent = fmt(camera.avg_ear, 3);
+    setBar('earBar', earPct, earColor);
+
+    // keyboard section
+    const kpmPct = Math.min((keyboard.keys_per_minute / 500) * 100, 100);
+    document.getElementById('kpmVal').textContent = fmt(keyboard.keys_per_minute, 0) + ' kpm';
+    setBar('kpmBar', kpmPct, keyboard.keys_per_minute > 400 ? 'var(--red)' : 'var(--blue)');
+
+    const errColor = keyboard.error_rate > thresholds.error_stress_pct ? 'var(--red)' : 'var(--green)';
+    document.getElementById('errVal').textContent = fmt(keyboard.error_rate) + '%';
+    setBar('errBar', Math.min(keyboard.error_rate * 2, 100), errColor);
+
+    const pauseColor = keyboard.avg_pause_secs > thresholds.pause_fatigue_s ? 'var(--red)' : 'var(--green)';
+    document.getElementById('pauseVal').textContent = fmt(keyboard.avg_pause_secs) + 's';
+    setBar('pauseBar', Math.min((keyboard.avg_pause_secs / 20) * 100, 100), pauseColor);
+
+    // raw params
+    document.getElementById('pBlink').textContent   = fmt(camera.blink_rate);
+    document.getElementById('pEar').textContent     = fmt(camera.avg_ear, 3);
+    document.getElementById('pKpm').textContent     = fmt(keyboard.keys_per_minute, 0);
+    document.getElementById('pErr').textContent     = fmt(keyboard.error_rate);
+    document.getElementById('pPause').textContent   = fmt(keyboard.avg_pause_secs);
+    document.getElementById('pCombined').textContent = fmt(assessment.combined, 0);
+
+    // signals
+    const signalEl = document.getElementById('signals');
+    if (assessment.reasons.length === 0) {
+      signalEl.innerHTML = '<div class="signal-none">No signals — all clear</div>';
+    } else {
+      signalEl.innerHTML = assessment.reasons.map(r => {
+        const color = r.toLowerCase().includes('fatigue') || r.toLowerCase().includes('blink') || r.toLowerCase().includes('eyelid') || r.toLowerCase().includes('pause')
+          ? 'var(--yellow)' : 'var(--red)';
+        return `<div class="signal-item">
+          <div class="signal-dot" style="background:${color}"></div>
+          <span>${r}</span>
+        </div>`;
+      }).join('');
+    }
+
+    document.getElementById('refreshNote').textContent = 'Last updated ' + new Date().toLocaleTimeString() + ' · refreshing every 5s';
+
+  } catch (e) {
+    document.getElementById('liveLabel').textContent = 'Connection error';
+    document.getElementById('liveDot').className = 'status-dot';
+  }
+}
+
+refresh();
+setInterval(refresh, 5000);
+</script>
+</body>
+</html>
