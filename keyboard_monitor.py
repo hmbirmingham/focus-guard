@@ -8,16 +8,29 @@ PAUSE_THRESHOLD = 2.0   # seconds between keystrokes to count as a pause
 
 
 class KeyboardMonitor:
+    """Producer-consumer: pynput's listener thread is the sole producer
+    (_on_press); get_stats() is the consumer called from the UI, Flask, and
+    logger threads.
+
+    Lock strategy: one coarse Lock around the whole _on_press body and the
+    whole get_stats() body. Append, prune, and recalculate happen atomically
+    in a single critical section, so derived stats always agree with the
+    deques they were computed from."""
+
     def __init__(self, window_seconds=60):
-        self.window_seconds = window_seconds
+        self.window_seconds = window_seconds   # immutable after init — read lock-free
         self._lock = threading.Lock()
         self._listener = None
 
+        # Shared (lock-guarded): raw event timestamps, pruned to the rolling
+        # window inside the same critical section that appends.
         self._key_times = deque()       # timestamps of all keystrokes
         self._error_times = deque()     # timestamps of backspace/delete presses
-        self._last_key_time = None
+        self._last_key_time = None      # shared — only touched inside _on_press's lock
         self._pause_durations = deque(maxlen=50)
 
+        # Shared (lock-guarded) derived stats — recomputed by the producer
+        # after every keystroke, snapshot by get_stats().
         self.keys_per_minute = 0.0
         self.error_rate = 0.0           # backspaces as % of total keys
         self.avg_pause = 0.0            # avg seconds between bursts

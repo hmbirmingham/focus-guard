@@ -27,15 +27,29 @@ def eye_aspect_ratio(landmarks, eye_indices, w, h):
 
 
 class CameraMonitor:
+    """Producer-consumer: the capture thread (_run) is the sole producer of
+    all shared state below; get_stats() is the consumer called from the UI,
+    Flask, and logger threads.
+
+    Lock strategy: a single coarse Lock guards every shared structure. The
+    producer holds it only for short append/recalculate sections (never
+    during frame capture or mediapipe inference), and the consumer takes a
+    point-in-time snapshot under the same lock — so readers can never see a
+    half-updated set of stats."""
+
     def __init__(self, window_seconds=60):
-        self.window_seconds = window_seconds
+        self.window_seconds = window_seconds   # immutable after init — read lock-free
         self._lock = threading.Lock()
         self._running = False
 
-        # rolling window of (timestamp, blink) events
+        # Shared (lock-guarded): rolling window of blink timestamps.
+        # Producer appends + prunes; consumer never touches it directly.
         self._blink_times = deque()
-        self._ear_history = deque(maxlen=300)   # ~10s at 30fps
+        # Shared (lock-guarded): recent EAR samples, ~10s at 30fps.
+        self._ear_history = deque(maxlen=300)
 
+        # Shared (lock-guarded) derived stats — written by producer in the
+        # same critical section that updates the deques, read via get_stats().
         self.blink_rate = 0.0       # blinks per minute
         self.avg_ear = 0.3          # average eye openness (0=closed, ~0.3=normal)
         self.face_detected = False

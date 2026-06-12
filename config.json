@@ -1,0 +1,10 @@
+{
+  "blink_normal_min": 12,
+  "blink_normal_max": 20,
+  "ear_drowsy": 0.22,
+  "error_stress_pct": 15,
+  "pause_fatigue_s": 8,
+  "break_threshold": 60,
+  "poll_interval_s": 10,
+  "notify_cooldown_s": 600
+}

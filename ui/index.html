@@ -319,12 +319,70 @@
     </div>
   </div>
 
+  <!-- Trend chart -->
+  <div class="card full-width">
+    <div class="card-label">Session Trend — Last Hour</div>
+    <div style="position:relative;height:220px">
+      <canvas id="trendChart"></canvas>
+    </div>
+    <div class="signal-none" id="trendEmpty" style="display:none;margin-top:8px">
+      Not enough data yet — rows are logged every 10s
+    </div>
+  </div>
+
 </div>
 
 <div class="refresh-note" id="refreshNote">Refreshing every 5s…</div>
 
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <script>
 const CIRCUMFERENCE = 2 * Math.PI * 32; // ~201
+
+// ── Trend chart (fatigue + stress over the session) ──
+let trendChart = null;
+
+function initTrendChart() {
+  const ctx = document.getElementById('trendChart').getContext('2d');
+  trendChart = new Chart(ctx, {
+    type: 'line',
+    data: { labels: [], datasets: [
+      { label: 'Fatigue',  data: [], borderColor: '#ff9f0a', backgroundColor: 'rgba(255,159,10,.08)',  fill: true, tension: .35, pointRadius: 0, borderWidth: 2 },
+      { label: 'Stress',   data: [], borderColor: '#ff3b30', backgroundColor: 'rgba(255,59,48,.08)',   fill: true, tension: .35, pointRadius: 0, borderWidth: 2 },
+      { label: 'Combined', data: [], borderColor: '#007aff', backgroundColor: 'rgba(0,122,255,.06)',   fill: false, tension: .35, pointRadius: 0, borderWidth: 2, borderDash: [5,4] },
+    ]},
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      interaction: { mode: 'index', intersect: false },
+      scales: {
+        y: { min: 0, max: 100, ticks: { stepSize: 25 }, grid: { color: 'rgba(0,0,0,.05)' } },
+        x: { ticks: { maxTicksLimit: 8, autoSkip: true }, grid: { display: false } },
+      },
+      plugins: {
+        legend: { labels: { usePointStyle: true, boxWidth: 8, font: { size: 11 } } },
+      },
+    },
+  });
+}
+
+async function refreshTrend() {
+  try {
+    const res  = await fetch('/api/history');
+    const data = await res.json();
+    const rows = data.rows || [];
+
+    document.getElementById('trendEmpty').style.display = rows.length < 2 ? 'block' : 'none';
+    if (!trendChart) initTrendChart();
+
+    trendChart.data.labels = rows.map(r =>
+      new Date(r.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}));
+    trendChart.data.datasets[0].data = rows.map(r => r.fatigue_score);
+    trendChart.data.datasets[1].data = rows.map(r => r.stress_score);
+    trendChart.data.datasets[2].data = rows.map(r => r.combined_score);
+    trendChart.update();
+  } catch (e) { /* chart is non-critical — keep dashboard alive */ }
+}
 
 function scoreColor(v) {
   if (v < 30) return 'var(--green)';
@@ -434,7 +492,9 @@ async function refresh() {
 }
 
 refresh();
+refreshTrend();
 setInterval(refresh, 5000);
+setInterval(refreshTrend, 15000);
 </script>
 </body>
 </html>

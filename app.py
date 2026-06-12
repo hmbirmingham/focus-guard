@@ -13,14 +13,16 @@ import sys
 from flask import Flask, jsonify, send_from_directory
 from camera_monitor   import CameraMonitor
 from keyboard_monitor import KeyboardMonitor
-from detector         import assess, BLINK_NORMAL_MIN, BLINK_NORMAL_MAX, \
+from detector         import assess, CONFIG, BLINK_NORMAL_MIN, BLINK_NORMAL_MAX, \
                              EAR_DROWSY, ERROR_STRESS_PCT, PAUSE_FATIGUE_S, BREAK_THRESHOLD
 from notifier         import Notifier
+from data_logger      import DataLogger
 
 flask_app = Flask(__name__, static_folder="ui", static_url_path="")
 _camera   = CameraMonitor()
 _kb       = KeyboardMonitor()
-_notifier = Notifier()
+_notifier = Notifier(cooldown_seconds=CONFIG["notify_cooldown_s"])
+_logger   = DataLogger(_camera, _kb, interval_s=CONFIG["poll_interval_s"])
 DASHBOARD_PORT = 5001
 
 
@@ -55,6 +57,12 @@ def api_status():
     })
 
 
+@flask_app.route("/api/history")
+def api_history():
+    """Last hour of logged rows for the dashboard trend chart."""
+    return jsonify({"rows": _logger.history(minutes=60)})
+
+
 def _run_flask():
     import logging
     logging.getLogger("werkzeug").setLevel(logging.ERROR)
@@ -70,7 +78,7 @@ from AppKit import (
 )
 from Foundation import NSTimer
 
-POLL_INTERVAL = 10.0  # seconds
+POLL_INTERVAL = float(CONFIG["poll_interval_s"])  # seconds
 
 
 def _score_icon(v: float) -> str:
@@ -173,6 +181,7 @@ class AppDelegate(NSObject):
 if __name__ == "__main__":
     _camera.start()
     _kb.start()
+    _logger.start()
     threading.Thread(target=_run_flask, daemon=True).start()
 
     app = NSApplication.sharedApplication()

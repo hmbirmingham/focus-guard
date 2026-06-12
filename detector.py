@@ -11,16 +11,46 @@ Stress signals (keyboard):
   - Typing speed drop          → compared against a rolling baseline
 """
 
+import json
+import os
 from dataclasses import dataclass
 
+# Defaults used when config.json is missing or a key is absent.
+_DEFAULTS = {
+    "blink_normal_min": 12,    # blinks/min healthy range low
+    "blink_normal_max": 20,
+    "ear_drowsy":       0.22,
+    "error_stress_pct": 15,    # % backspaces that indicates stress
+    "pause_fatigue_s":  8,     # avg pause >8s = brain stalling
+    "break_threshold":  60,    # combined score to recommend a break
+    "poll_interval_s":  10,
+    "notify_cooldown_s": 600,
+}
 
-BLINK_NORMAL_MIN = 12   # blinks/min healthy range low
-BLINK_NORMAL_MAX = 20
-EAR_DROWSY       = 0.22
-ERROR_STRESS_PCT = 15   # % backspaces that indicates stress
-PAUSE_FATIGUE_S  = 8    # avg pause >8s = brain stalling
+_CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
 
-BREAK_THRESHOLD  = 60   # combined score to recommend a break
+
+def load_config() -> dict:
+    """Read thresholds from config.json, falling back to _DEFAULTS for any
+    missing key (or the whole file). Keeps tuning separate from scoring logic."""
+    cfg = dict(_DEFAULTS)
+    try:
+        with open(_CONFIG_PATH) as f:
+            cfg.update(json.load(f))
+    except (FileNotFoundError, json.JSONDecodeError):
+        pass
+    return cfg
+
+
+CONFIG = load_config()
+
+BLINK_NORMAL_MIN = CONFIG["blink_normal_min"]
+BLINK_NORMAL_MAX = CONFIG["blink_normal_max"]
+EAR_DROWSY       = CONFIG["ear_drowsy"]
+ERROR_STRESS_PCT = CONFIG["error_stress_pct"]
+PAUSE_FATIGUE_S  = CONFIG["pause_fatigue_s"]
+
+BREAK_THRESHOLD  = CONFIG["break_threshold"]
 
 
 @dataclass
