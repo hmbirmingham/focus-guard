@@ -85,7 +85,10 @@ flowchart LR
 ## Requirements
 
 - macOS 12 or later
-- Python 3.9+
+- Python 3.9–3.12 (mediapipe's pinned version has no wheel for 3.13+, and
+  newer mediapipe releases have dropped the legacy `solutions` API this app
+  uses — if your default `python3` is newer, create a venv with an
+  in-range interpreter, e.g. macOS's built-in `/usr/bin/python3 -m venv .venv`)
 - Camera and Accessibility permissions granted to Terminal
 
 ---
@@ -129,7 +132,10 @@ focus-guard/
 ├── notifier.py         # macOS notifications via osascript
 ├── config.json         # Tunable thresholds (optional — defaults built in)
 ├── main.py             # Legacy terminal-only runner
+├── sync.sh             # git add/commit/push helper (targets main — see Development)
 ├── logs/               # session_YYYY-MM-DD.csv (created at runtime)
+├── tests/              # pytest unit tests (scoring logic, monitor internals)
+├── testing/            # manual/e2e run logs
 └── ui/
     └── index.html      # Apple-style dashboard (auto-refreshes every 5s)
 ```
@@ -149,6 +155,43 @@ One file per day, appended across restarts. The dashboard's trend chart reads th
 
 ---
 
+## Testing
+
+```bash
+pip3 install pytest
+python3 -m pytest tests/
+```
+
+`tests/test_detector.py` covers the fatigue/stress/combined scoring logic,
+the EAR drowsiness threshold, and `config.json` fallback behavior.
+`tests/test_monitors.py` covers the EAR geometry helper and
+`KeyboardMonitor`'s error-rate and pause-tracking math directly (no live
+camera or keyboard needed).
+
+A full live end-to-end run — process, Flask API, and CSV logging confirmed
+programmatically, with the parts that need a human at the camera/screen
+(menu bar rendering, native notification) called out separately — is logged
+in [`testing/e2e_run_log.md`](testing/e2e_run_log.md).
+
+---
+
+## Development
+
+The initial build (first three commits) landed straight on `main` before
+branch discipline was formalized. Going forward:
+
+- `main` — stable, working state only
+- `dev` — integration branch; feature/fix branches merge here first
+- `feat/<name>` / `fix/<name>` — one branch per unit of work, branched from `dev`
+- Commit messages follow `type(scope): summary` (`feat`, `fix`, `test`, `docs`, `chore`)
+
+`sync.sh` currently pushes straight to `main` (`git push origin main
+--force-with-lease`), which predates this workflow — worth pointing it at
+`dev` (or retiring it in favor of PRs) as part of adopting the branch
+structure above.
+
+---
+
 ## Roadmap
 
 - [x] Historical charts (fatigue trend over the session)
@@ -158,3 +201,9 @@ One file per day, appended across restarts. The dashboard's trend chart reads th
 - [ ] Pomodoro-style break timer
 - [ ] Dock-less launch on login
 - [ ] Daily summary report from logged data
+
+**Status:** Core monitoring, logging, and dashboard are implemented and unit
+tested; a live run confirmed the process, API, and CSV logging end to end.
+Menu bar rendering and the native break notification still need a manual
+check with camera/accessibility permissions granted (see
+`testing/e2e_run_log.md`) before calling the UI itself fully validated.
